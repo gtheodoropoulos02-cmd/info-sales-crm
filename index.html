@@ -417,28 +417,34 @@ window.navigate = function(page){
 };
 
 // ── Firestore helpers ──
-async function loadStatuses(){ const s=await getDocs(collection(db,'statuses')); CACHE.statuses=s.docs.map(d=>({id:d.id,...d.data()})); return CACHE.statuses; }
+async function loadStatuses(){ if(CACHE.statuses.length) return CACHE.statuses; const s=await getDocs(collection(db,"statuses")); CACHE.statuses=s.docs.map(d=>({id:d.id,...d.data()})); return CACHE.statuses; }
 async function loadCategories(){ const s=await getDocs(collection(db,'categories')); CACHE.categories=s.docs.map(d=>({id:d.id,...d.data()})); return CACHE.categories; }
 async function loadPartners(){ const s=await getDocs(query(collection(db,'users'),where('role','==','partner'))); CACHE.partners=s.docs.map(d=>({id:d.id,...d.data()})); return CACHE.partners; }
 async function loadProviders(catId){ const s=await getDocs(query(collection(db,'providers'),where('categoryId','==',catId))); return s.docs.map(d=>({id:d.id,...d.data()})); }
 async function loadProducts(provId){ const s=await getDocs(query(collection(db,'products'),where('providerId','==',provId))); return s.docs.map(d=>({id:d.id,...d.data()})); }
 
-async function loadApplications(){
-  let q;
-  if(CURRENT_ROLE==='admin') q=query(collection(db,'applications'),orderBy('createdAt','desc'));
-  else q=query(collection(db,'applications'),where('partnerId','==',CURRENT_USER.uid),orderBy('createdAt','desc'));
-  const s=await getDocs(q);
-  CACHE.applications=s.docs.map(d=>({id:d.id,...d.data()}));
+async function loadApplications(force=false){
+  if(!force && CACHE.applications.length) return CACHE.applications;
+  try {
+    let q;
+    if(CURRENT_ROLE==='admin') q=collection(db,'applications');
+    else q=query(collection(db,'applications'),where('partnerId','==',CURRENT_USER.uid));
+    const s=await getDocs(q);
+    CACHE.applications=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>{
+      const ta=a.createdAt?.seconds||0,tb=b.createdAt?.seconds||0; return tb-ta;
+    });
+  } catch(e){ console.error(e); CACHE.applications=[]; }
   return CACHE.applications;
 }
 
-async function loadInfoCompanies(){
+async function loadInfoCompanies(force=false){
+  if(!force && CACHE.infoCompanies.length) return CACHE.infoCompanies;
   const s=await getDocs(collection(db,'infoCompanies'));
   const companies=s.docs.map(d=>({id:d.id,...d.data(),plans:[]}));
-  for(const c of companies){
+  await Promise.all(companies.map(async c=>{
     const ps=await getDocs(collection(db,'infoCompanies',c.id,'plans'));
     c.plans=ps.docs.map(d=>({id:d.id,...d.data()}));
-  }
+  }));
   CACHE.infoCompanies=companies;
   return companies;
 }
