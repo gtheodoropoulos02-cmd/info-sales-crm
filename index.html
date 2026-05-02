@@ -879,38 +879,111 @@ window.changeAppStatus = async function(appId, statusId){
   showNotif('Στάτους ενημερώθηκε');
 };
 
-// ── Edit App (Εκκρεμότητα) ──
+// ── Edit App (Εκκρεμότητα) - Full edit form ──
 window.editApp = async function(appId){
-  showModal(`
-<div class="modal-header"><div class="modal-title">Επεξεργασία Εκκρεμότητας</div><button class="modal-close" onclick="closeModal()">×</button></div>
+  const snap=await getDoc(doc(db,'applications',appId));
+  if(!snap.exists()) return;
+  const a={id:snap.id,...snap.data()};
+  const NOMOI=['Αττικής','Θεσσαλονίκης','Πατρών','Ηρακλείου','Λάρισας','Βόλου','Ιωαννίνων','Αλεξανδρούπολης','Καβάλας','Χανίων'];
+  const docs=a.docs||{};
+  const adminComment=a.adminComment||'';
+
+  showModal(`<div class="modal-header"><div class="modal-title">Επεξεργασία Αίτησης ${esc(a.code)}</div><button class="modal-close" onclick="closeModal()">×</button></div>
 <div class="modal-body">
-  <div class="alert alert-warning">⚠️ Προσθέστε τα απαιτούμενα στοιχεία και αποθηκεύστε.</div>
-  <div class="form-group"><label>Σημειώσεις</label><textarea id="edit-notes" placeholder="Επιπλέον πληροφορίες..."></textarea></div>
-  <div class="form-group"><label>Επιπλέον Δικαιολογητικό</label>
-    <div class="upload-zone" id="edit-uz"><input type="file" accept="image/*,application/pdf" multiple onchange="handleEditDoc(event)">
-      <div style="font-size:12px;color:var(--text2)">📎 Κάντε κλικ για ανέβασμα</div></div>
-    <div id="edit-doc-status" style="font-size:12px;color:var(--green);margin-top:8px"></div>
+  ${adminComment?`<div class="alert alert-warning">💬 <strong>Σχόλια Διαχειριστή:</strong> ${esc(adminComment)}</div>`:'<div class="alert alert-warning">⚠️ Η αίτηση βρίσκεται σε εκκρεμότητα. Διορθώστε τα στοιχεία και αποθηκεύστε.</div>'}
+
+  <div class="detail-section"><div class="detail-section-title">Στοιχεία Πελάτη</div>
+    <div class="form-row"><div class="form-group"><label>Όνομα <span class="req">*</span></label><input type="text" id="ea-fname" value="${esc(a.custFirstname||'')}"></div><div class="form-group"><label>Επίθετο <span class="req">*</span></label><input type="text" id="ea-lname" value="${esc(a.custLastname||'')}"></div></div>
+    <div class="form-row"><div class="form-group"><label>Πατρώνυμο</label><input type="text" id="ea-pat" value="${esc(a.custPatronimo||'')}"></div><div class="form-group"><label>Α.Δ.Τ</label><input type="text" id="ea-adt" value="${esc(a.custAdt||'')}"></div></div>
+    <div class="form-row"><div class="form-group"><label>ΑΦΜ</label><input type="text" id="ea-afm" value="${esc(a.custAfm||'')}"></div><div class="form-group"><label>Δ.Ο.Υ</label><input type="text" id="ea-doy" value="${esc(a.custDoy||'')}"></div></div>
+    <div class="form-row"><div class="form-group"><label>Τηλέφωνο</label><input type="text" id="ea-phone" value="${esc(a.custPhone||'')}"></div><div class="form-group"><label>Κινητό</label><input type="text" id="ea-kinito" value="${esc(a.custKinito||'')}"></div></div>
+    <div class="form-group"><label>Email</label><input type="email" id="ea-email" value="${esc(a.custEmail||'')}"></div>
+    <div class="form-row"><div class="form-group"><label>Διεύθυνση</label><input type="text" id="ea-address" value="${esc(a.custAddress||'')}"></div><div class="form-group"><label>Αριθμός</label><input type="text" id="ea-number" value="${esc(a.custNumber||'')}"></div></div>
+    <div class="form-row3"><div class="form-group"><label>Τ.Κ</label><input type="text" id="ea-tk" value="${esc(a.custTk||'')}"></div><div class="form-group"><label>Πόλη</label><input type="text" id="ea-poli" value="${esc(a.custPoli||'')}"></div><div class="form-group"><label>Περιοχή</label><input type="text" id="ea-periochi" value="${esc(a.custPeriochi||'')}"></div></div>
+  </div>
+
+  <div class="detail-section"><div class="detail-section-title">Στοιχεία Προγράμματος</div>
+    <div class="form-row"><div class="form-group"><label>Πακέτο</label><input type="text" id="ea-paketo" value="${esc(a.progPaketo||'')}"></div><div class="form-group"><label>Τιμή (€)</label><input type="text" id="ea-timi" value="${esc(a.progTimi||'')}"></div></div>
+    <div class="form-group"><label>Σημειώσεις</label><textarea id="ea-notes">${esc(a.notes||'')}</textarea></div>
+  </div>
+
+  <div class="detail-section"><div class="detail-section-title">Δικαιολογητικά</div>
+    <div class="form-group"><label>🪪 Ταυτότητα ${docs.identity?'<span style="color:var(--green)">✓ Ανεβασμένη</span>':'<span class="req">* Λείπει</span>'}</label>
+      <div class="upload-zone ${docs.identity?'uploaded':''}" id="ea-uz-identity">
+        <input type="file" accept="image/*,application/pdf" onchange="handleEditDocType(event,'identity')">
+        <div style="font-size:12px;color:var(--text2);pointer-events:none" id="ea-ul-identity">${docs.identity?'Κάντε κλικ για αντικατάσταση':'Κάντε κλικ για ανέβασμα'}</div>
+      </div>
+    </div>
+    <div class="form-group"><label>📄 Λογαριασμός/ΔΕΚΟ ${docs.logariasmos?'<span style="color:var(--green)">✓</span>':''}</label>
+      <div class="upload-zone ${docs.logariasmos?'uploaded':''}" id="ea-uz-logariasmos">
+        <input type="file" accept="image/*,application/pdf" onchange="handleEditDocType(event,'logariasmos')">
+        <div style="font-size:12px;color:var(--text2);pointer-events:none" id="ea-ul-logariasmos">${docs.logariasmos?'Κάντε κλικ για αντικατάσταση':'Κάντε κλικ για ανέβασμα'}</div>
+      </div>
+    </div>
+    <div class="form-group"><label>📋 Βεβαίωση ΑΦΜ ${docs.bebaiosi?'<span style="color:var(--green)">✓</span>':''}</label>
+      <div class="upload-zone ${docs.bebaiosi?'uploaded':''}" id="ea-uz-bebaiosi">
+        <input type="file" accept="image/*,application/pdf" onchange="handleEditDocType(event,'bebaiosi')">
+        <div style="font-size:12px;color:var(--text2);pointer-events:none" id="ea-ul-bebaiosi">${docs.bebaiosi?'Κάντε κλικ για αντικατάσταση':'Κάντε κλικ για ανέβασμα'}</div>
+      </div>
+    </div>
+    <div class="form-group"><label>📎 Επιπλέον Έγγραφα</label>
+      <div class="upload-zone" id="ea-uz-extra">
+        <input type="file" accept="image/*,application/pdf" multiple onchange="handleEditDocType(event,'extra')">
+        <div style="font-size:12px;color:var(--text2);pointer-events:none" id="ea-ul-extra">Κάντε κλικ για ανέβασμα (πολλαπλά)</div>
+      </div>
+    </div>
   </div>
 </div>
 <div class="modal-footer">
   <button class="btn btn-ghost" onclick="closeModal()">Ακύρωση</button>
-  <button class="btn btn-primary" onclick="saveEditApp('${appId}')">Αποθήκευση</button>
+  <button class="btn btn-primary" onclick="saveEditApp('${appId}')">💾 Αποθήκευση</button>
 </div>`);
+
+  window._editDocs={...docs};
 };
 
-let EDIT_EXTRA_DOCS=[];
-window.handleEditDoc = async function(e){
-  const files=Array.from(e.target.files); EDIT_EXTRA_DOCS=[];
-  for(const f of files){ const b64=await toBase64(f); EDIT_EXTRA_DOCS.push({name:f.name,data:b64}); }
-  document.getElementById('edit-doc-status').textContent=`✓ ${files.length} αρχείο(α)`;
+let _editNewDocs={};
+window.handleEditDocType=async function(e,type){
+  const files=Array.from(e.target.files);
+  if(!files.length) return;
+  const lbl=document.getElementById('ea-ul-'+type);
+  const zone=document.getElementById('ea-uz-'+type);
+  lbl.textContent='Επεξεργασία...';
+  if(type==='extra'){
+    if(!_editNewDocs.extra) _editNewDocs.extra=[];
+    for(const f of files){ const b64=await toBase64(f); _editNewDocs.extra.push({name:f.name,data:b64}); }
+    lbl.textContent=`✓ ${files.length} αρχείο(α)`;
+  } else {
+    const b64=await toBase64(files[0]);
+    _editNewDocs[type]={name:files[0].name,data:b64};
+    lbl.textContent='✓ '+files[0].name;
+  }
+  zone.classList.add('uploaded');
 };
-window.saveEditApp = async function(appId){
-  const notes=document.getElementById('edit-notes').value;
+
+window.saveEditApp=async function(appId){
   const snap=await getDoc(doc(db,'applications',appId));
   const existing=(snap.data()?.docs)||{};
-  if(EDIT_EXTRA_DOCS.length){ if(!existing.extra) existing.extra=[]; existing.extra=[...existing.extra,...EDIT_EXTRA_DOCS]; }
-  await updateDoc(doc(db,'applications',appId),{notes,docs:existing,updatedAt:serverTimestamp()});
-  closeModal(); showNotif('Αποθηκεύτηκε');
+  // Merge new docs
+  const mergedDocs={...existing,..._editNewDocs};
+  if(_editNewDocs.extra&&existing.extra){ mergedDocs.extra=[...(existing.extra||[]),..._editNewDocs.extra]; }
+  _editNewDocs={};
+
+  const g=id=>document.getElementById(id)?.value||'';
+  await updateDoc(doc(db,'applications',appId),{
+    custFirstname:g('ea-fname'), custLastname:g('ea-lname'), custPatronimo:g('ea-pat'),
+    custAdt:g('ea-adt'), custAfm:g('ea-afm'), custDoy:g('ea-doy'),
+    custPhone:g('ea-phone'), custKinito:g('ea-kinito'), custEmail:g('ea-email'),
+    custAddress:g('ea-address'), custNumber:g('ea-number'), custTk:g('ea-tk'),
+    custPoli:g('ea-poli'), custPeriochi:g('ea-periochi'),
+    progPaketo:g('ea-paketo'), progTimi:g('ea-timi'),
+    notes:g('ea-notes'),
+    docs:mergedDocs,
+    updatedAt:serverTimestamp()
+  });
+  CACHE.applications=[];
+  closeModal();
+  showNotif('Η αίτηση ενημερώθηκε επιτυχώς!');
   navigate('my-apps');
 };
 
@@ -975,9 +1048,33 @@ window.filterAllApps=function(){
 };
 
 window.quickStatus=async function(appId,statusId){
-  await updateDoc(doc(db,'applications',appId),{statusId,updatedAt:serverTimestamp()});
+  const statuses=await loadStatuses();
+  const st=statuses.find(s=>s.id===statusId);
+  if(st&&st.name==='Εκκρεμότητα'){
+    showModal(`<div class="modal-header"><div class="modal-title">Σχόλια Εκκρεμότητας</div><button class="modal-close" onclick="closeModal()">×</button></div>
+<div class="modal-body">
+  <div class="alert alert-warning">⚠️ Γράψτε τι χρειάζεται ο συνεργάτης να διορθώσει.</div>
+  <div class="form-group"><label>Σχόλια προς τον Συνεργάτη <span class="req">*</span></label>
+    <textarea id="admin-comment" placeholder="π.χ. Λείπει η ταυτότητα, παρακαλώ ανεβάστε ξανά..." style="min-height:120px"></textarea></div>
+</div>
+<div class="modal-footer">
+  <button class="btn btn-ghost" onclick="closeModal()">Ακύρωση</button>
+  <button class="btn btn-primary" onclick="confirmQuickStatus('${appId}','${statusId}')">Αποθήκευση & Αποστολή</button>
+</div>`);
+  } else {
+    await updateDoc(doc(db,'applications',appId),{statusId,adminComment:'',updatedAt:serverTimestamp()});
+    if(window._allAppsData){ const a=window._allAppsData.apps.find(x=>x.id===appId); if(a) a.statusId=statusId; }
+    showNotif('Στάτους ενημερώθηκε');
+  }
+};
+
+window.confirmQuickStatus=async function(appId,statusId){
+  const comment=document.getElementById('admin-comment')?.value.trim();
+  if(!comment){ showNotif('Παρακαλώ γράψτε σχόλια',false); return; }
+  await updateDoc(doc(db,'applications',appId),{statusId,adminComment:comment,updatedAt:serverTimestamp()});
   if(window._allAppsData){ const a=window._allAppsData.apps.find(x=>x.id===appId); if(a) a.statusId=statusId; }
-  showNotif('Στάτους ενημερώθηκε');
+  closeModal();
+  showNotif('Στάτους → Εκκρεμότητα');
 };
 
 // ── Partners (Admin) ──
