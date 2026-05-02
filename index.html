@@ -406,7 +406,7 @@ window.navigate = function(page){
   renderNav(page);
   document.getElementById('page-title').textContent=PAGE_TITLES[page]||page;
   const c=document.getElementById('page-content');
-  c.innerHTML=`<div style="text-align:center;padding:60px;color:var(--text3)"><span class="spinner" style="width:28px;height:28px;border-color:rgba(255,255,255,.15);border-top-color:var(--accent)"></span></div>`;
+  c.innerHTML='';
   if(page==='dashboard') renderDashboard(c);
   else if(page==='my-apps') renderMyApps(c);
   else if(page==='new-app'){ NEW_APP_DRAFT={}; NEW_APP_STEP=1; renderNewApp(c); }
@@ -417,9 +417,9 @@ window.navigate = function(page){
 };
 
 // ── Firestore helpers ──
-async function loadStatuses(){ if(CACHE.statuses.length) return CACHE.statuses; const s=await getDocs(collection(db,"statuses")); CACHE.statuses=s.docs.map(d=>({id:d.id,...d.data()})); return CACHE.statuses; }
-async function loadCategories(){ const s=await getDocs(collection(db,'categories')); CACHE.categories=s.docs.map(d=>({id:d.id,...d.data()})); return CACHE.categories; }
-async function loadPartners(){ const s=await getDocs(query(collection(db,'users'),where('role','==','partner'))); CACHE.partners=s.docs.map(d=>({id:d.id,...d.data()})); return CACHE.partners; }
+async function loadStatuses(){ if(CACHE.statuses.length) return CACHE.statuses; const s=await getDocs(collection(db,'statuses')); CACHE.statuses=s.docs.map(d=>({id:d.id,...d.data()})); return CACHE.statuses; }
+async function loadCategories(){ if(CACHE.categories.length) return CACHE.categories; const s=await getDocs(collection(db,'categories')); CACHE.categories=s.docs.map(d=>({id:d.id,...d.data()})); return CACHE.categories; }
+async function loadPartners(){ if(CACHE.partners.length) return CACHE.partners; const s=await getDocs(query(collection(db,'users'),where('role','==','partner'))); CACHE.partners=s.docs.map(d=>({id:d.id,...d.data()})); return CACHE.partners; }
 async function loadProviders(catId){ const s=await getDocs(query(collection(db,'providers'),where('categoryId','==',catId))); return s.docs.map(d=>({id:d.id,...d.data()})); }
 async function loadProducts(provId){ const s=await getDocs(query(collection(db,'products'),where('providerId','==',provId))); return s.docs.map(d=>({id:d.id,...d.data()})); }
 
@@ -473,6 +473,7 @@ function formatDate(ts){
 
 // ── Dashboard ──
 async function renderDashboard(c){
+  c.innerHTML='<div class="stat-grid">'+['blue','green','yellow','red'].map(col=>`<div class="stat-card ${col}" style="opacity:.4"><div class="stat-label">...</div><div class="stat-val">—</div></div>`).join('')+'</div><div class="card"><div class="card-header"><div class="card-title">Πρόσφατες Αιτήσεις</div></div><div style="text-align:center;padding:40px"><span class="spinner" style="width:20px;height:20px;border-color:rgba(255,255,255,.1);border-top-color:var(--accent)"></span></div></div>';
   const [apps, statuses] = await Promise.all([loadApplications(), loadStatuses()]);
   const total=apps.length;
   let active=0,pending=0,review=0;
@@ -540,28 +541,37 @@ ${partnerStats}`;
 
 // ── My Apps (Partner) ──
 async function renderMyApps(c){
-  const [apps, statuses]=await Promise.all([loadApplications(),loadStatuses()]);
-  const stMap={}; for(const s of statuses) stMap[s.id]={name:s.name,color:s.color};
-  c.innerHTML=`
-<div class="card">
-  <div class="card-header"><div class="card-title">Οι Αιτήσεις μου (${apps.length})</div><button class="btn btn-primary btn-sm" onclick="navigate('new-app')">${svgIcon('plus')} Νέα Αίτηση</button></div>
+  // Render skeleton immediately
+  c.innerHTML=`<div class="card">
+  <div class="card-header"><div class="card-title">Οι Αιτήσεις μου</div><button class="btn btn-primary btn-sm" onclick="navigate('new-app')">${svgIcon('plus')} Νέα Αίτηση</button></div>
   <div style="overflow-x:auto">
   <table><thead><tr><th>Ημ/νία</th><th>ID</th><th>Πελάτης</th><th>ΑΦΜ</th><th>Πρόγραμμα</th><th>Στάτους</th><th></th></tr></thead>
-  <tbody>${apps.length===0?`<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:40px">Δεν υπάρχουν αιτήσεις ακόμα</td></tr>`:
-  apps.map(a=>{const st=stMap[a.statusId]||{name:'—',color:'gray'};return`<tr>
-    <td>${formatDate(a.createdAt)}</td>
-    <td><span class="inline-tag">${esc(a.code)}</span></td>
-    <td style="color:var(--text);font-weight:600">${esc(a.custFirstname)} ${esc(a.custLastname)}</td>
-    <td>${esc(a.custAfm)}</td>
-    <td>${esc(a.providerName)} · ${esc(a.productName)}</td>
-    <td>${badge(st.name,st.color)}</td>
-    <td style="display:flex;gap:6px">
-      <button class="btn btn-ghost btn-xs" onclick="viewApp('${a.id}')">${svgIcon('eye')} Προβολή</button>
-      ${st.name==='Εκκρεμότητα'?`<button class="btn btn-primary btn-xs" onclick="editApp('${a.id}')">${svgIcon('edit')} Επεξεργασία</button>`:''}
-    </td>
-  </tr>`}).join('')}
-  </tbody></table></div>
-</div>`;
+  <tbody id="my-apps-tbody"><tr><td colspan="7" style="text-align:center;padding:30px"><span class="spinner" style="width:20px;height:20px;border-color:rgba(255,255,255,.1);border-top-color:var(--accent)"></span></td></tr></tbody>
+  </table></div></div>`;
+
+  const [apps, statuses]=await Promise.all([loadApplications(true),loadStatuses()]);
+  const stMap={}; for(const s of statuses) stMap[s.id]={name:s.name,color:s.color};
+  const tbody=document.getElementById('my-apps-tbody');
+  if(!tbody) return;
+  const titleEl=c.querySelector('.card-title');
+  if(titleEl) titleEl.textContent='Οι Αιτήσεις μου ('+apps.length+')';
+  tbody.innerHTML=apps.length===0
+    ?'<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:40px">Δεν υπάρχουν αιτήσεις ακόμα</td></tr>'
+    :apps.map(a=>{
+      const st=stMap[a.statusId]||{name:'—',color:'gray'};
+      const isPending=st.name==='Εκκρεμότητα';
+      return'<tr'+(isPending?' style="background:rgba(245,158,11,.05)"':'')+'>'+
+        '<td>'+formatDate(a.createdAt)+'</td>'+
+        '<td><span class="inline-tag">'+esc(a.code)+'</span></td>'+
+        '<td style="color:var(--text);font-weight:600">'+esc(a.custFirstname)+' '+esc(a.custLastname)+'</td>'+
+        '<td>'+esc(a.custAfm)+'</td>'+
+        '<td>'+esc(a.providerName)+' · '+esc(a.productName)+'</td>'+
+        '<td>'+badge(st.name,st.color)+(isPending&&a.adminComment?(' <span title="'+esc(a.adminComment)+'" style="cursor:help;font-size:14px">💬</span>'):'')+'</td>'+
+        '<td style="display:flex;gap:6px">'+
+          '<button class="btn btn-ghost btn-xs" onclick="viewApp(''+a.id+'')">'+svgIcon('eye')+' Προβολή</button>'+
+          (isPending?'<button class="btn btn-xs" style="background:var(--yellow);color:#000;font-weight:700;border:none;border-radius:6px;padding:4px 10px;cursor:pointer" onclick="editApp(''+a.id+'')">'+svgIcon('edit')+' Επεξεργασία</button>':'')+
+        '</td></tr>';
+    }).join('');
 }
 
 // ── New App Wizard ──
@@ -881,9 +891,22 @@ window.changeAppStatus = async function(appId, statusId){
 
 // ── Edit App (Εκκρεμότητα) - Full edit form ──
 window.editApp = async function(appId){
+  // Show modal immediately with spinner
+  showModal(`<div class="modal-header"><div class="modal-title">Επεξεργασία Αίτησης</div><button class="modal-close" onclick="closeModal()">×</button></div>
+<div class="modal-body" style="text-align:center;padding:40px"><span class="spinner" style="width:28px;height:28px;border-color:rgba(255,255,255,.1);border-top-color:var(--accent)"></span></div>`);
+
   const snap=await getDoc(doc(db,'applications',appId));
-  if(!snap.exists()) return;
+  if(!snap.exists()){ closeModal(); return; }
   const a={id:snap.id,...snap.data()};
+
+  // Verify it's still Εκκρεμότητα
+  const statuses=await loadStatuses();
+  const currentStatus=statuses.find(s=>s.id===a.statusId);
+  if(!currentStatus||currentStatus.name!=='Εκκρεμότητα'){
+    closeModal();
+    showNotif('Η αίτηση δεν είναι πλέον σε εκκρεμότητα',false);
+    return;
+  }
   const NOMOI=['Αττικής','Θεσσαλονίκης','Πατρών','Ηρακλείου','Λάρισας','Βόλου','Ιωαννίνων','Αλεξανδρούπολης','Καβάλας','Χανίων'];
   const docs=a.docs||{};
   const adminComment=a.adminComment||'';
@@ -981,9 +1004,15 @@ window.saveEditApp=async function(appId){
     docs:mergedDocs,
     updatedAt:serverTimestamp()
   });
+  // Auto-set status back to "Προς Έλεγχο"
+  const statuses=await loadStatuses();
+  const reviewStatus=statuses.find(s=>s.name==='Προς Έλεγχο');
+  if(reviewStatus){
+    await updateDoc(doc(db,'applications',appId),{statusId:reviewStatus.id,adminComment:''});
+  }
   CACHE.applications=[];
   closeModal();
-  showNotif('Η αίτηση ενημερώθηκε επιτυχώς!');
+  showNotif('Η αίτηση ενημερώθηκε και επιστράφηκε σε Προς Έλεγχο!');
   navigate('my-apps');
 };
 
