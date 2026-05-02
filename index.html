@@ -568,8 +568,8 @@ async function renderMyApps(c){
         '<td>'+esc(a.providerName)+' · '+esc(a.productName)+'</td>'+
         '<td>'+badge(st.name,st.color)+(isPending&&a.adminComment?(' <span title="'+esc(a.adminComment)+'" style="cursor:help;font-size:14px">💬</span>'):'')+'</td>'+
         '<td style="display:flex;gap:6px">'+
-          '<button class="btn btn-ghost btn-xs" onclick="viewApp(''+a.id+'')">'+svgIcon('eye')+' Προβολή</button>'+
-          (isPending?'<button class="btn btn-xs" style="background:var(--yellow);color:#000;font-weight:700;border:none;border-radius:6px;padding:4px 10px;cursor:pointer" onclick="editApp(''+a.id+'')">'+svgIcon('edit')+' Επεξεργασία</button>':'')+
+          `<button class="btn btn-ghost btn-xs" onclick="viewApp('${a.id}')">${svgIcon('eye')} Προβολή</button>`+
+          (isPending?`<button class="btn btn-xs" style="background:var(--yellow);color:#000;font-weight:700;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-family:inherit" onclick="editApp('${a.id}')">${svgIcon('edit')} Επεξεργασία</button>`:'')+
         '</td></tr>';
     }).join('');
 }
